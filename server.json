@@ -1,0 +1,40 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.ctx-capture/ctx-capture",
+  "description": "Context-window observability for LLM agents: capture and query exactly what an agent saw at every step, byte-accurately and framework-agnostically.",
+  "title": "ctx-capture",
+  "repository": {
+    "url": "https://github.com/ctx-capture/ctx-capture",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "ctx-capture",
+      "version": "0.1.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "named",
+          "name": "--db",
+          "description": "SQLite database path to read/write traces from",
+          "isRequired": false,
+          "default": "ctx_capture.db"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "CTX_CAPTURE_BEARER_TOKEN",
+          "description": "Bearer token required only when running with --transport http",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

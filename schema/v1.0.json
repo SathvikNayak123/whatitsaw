@@ -1,0 +1,356 @@
+{
+  "$defs": {
+    "ModelCall": {
+      "properties": {
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": true,
+          "title": "Params",
+          "type": "object"
+        },
+        "messages": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Messages",
+          "type": "array"
+        },
+        "request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Request Id"
+        },
+        "response": {
+          "additionalProperties": true,
+          "title": "Response",
+          "type": "object"
+        },
+        "token_counts": {
+          "$ref": "#/$defs/TokenCounts"
+        },
+        "cost_usd": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cost Usd"
+        },
+        "latency_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latency Ms"
+        },
+        "raw_request_bytes_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Request Bytes Ref"
+        },
+        "raw_response_bytes_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Response Bytes Ref"
+        }
+      },
+      "required": [
+        "provider",
+        "model",
+        "messages"
+      ],
+      "title": "ModelCall",
+      "type": "object"
+    },
+    "Step": {
+      "properties": {
+        "step_index": {
+          "title": "Step Index",
+          "type": "integer"
+        },
+        "step_id": {
+          "title": "Step Id",
+          "type": "string"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "ended_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ended At"
+        },
+        "model_call": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelCall"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tool_calls": {
+          "items": {
+            "$ref": "#/$defs/ToolCall"
+          },
+          "title": "Tool Calls",
+          "type": "array"
+        },
+        "truncation_events": {
+          "items": {
+            "$ref": "#/$defs/TruncationEvent"
+          },
+          "title": "Truncation Events",
+          "type": "array"
+        }
+      },
+      "required": [
+        "step_index",
+        "started_at"
+      ],
+      "title": "Step",
+      "type": "object"
+    },
+    "TokenCounts": {
+      "properties": {
+        "prompt_tokens": {
+          "default": 0,
+          "title": "Prompt Tokens",
+          "type": "integer"
+        },
+        "completion_tokens": {
+          "default": 0,
+          "title": "Completion Tokens",
+          "type": "integer"
+        },
+        "total_tokens": {
+          "default": 0,
+          "title": "Total Tokens",
+          "type": "integer"
+        },
+        "cache_read_tokens": {
+          "default": 0,
+          "title": "Cache Read Tokens",
+          "type": "integer"
+        },
+        "cache_write_tokens": {
+          "default": 0,
+          "title": "Cache Write Tokens",
+          "type": "integer"
+        }
+      },
+      "title": "TokenCounts",
+      "type": "object"
+    },
+    "ToolCall": {
+      "properties": {
+        "tool_call_id": {
+          "title": "Tool Call Id",
+          "type": "string"
+        },
+        "tool_name": {
+          "title": "Tool Name",
+          "type": "string"
+        },
+        "args_raw": {
+          "additionalProperties": true,
+          "title": "Args Raw",
+          "type": "object"
+        },
+        "result_as_returned": {
+          "title": "Result As Returned"
+        },
+        "result_as_inserted": {
+          "default": null,
+          "title": "Result As Inserted"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "ended_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ended At"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "required": [
+        "tool_call_id",
+        "tool_name",
+        "args_raw",
+        "result_as_returned",
+        "started_at"
+      ],
+      "title": "ToolCall",
+      "type": "object"
+    },
+    "TruncationEvent": {
+      "properties": {
+        "location": {
+          "title": "Location",
+          "type": "string"
+        },
+        "original_size_bytes": {
+          "title": "Original Size Bytes",
+          "type": "integer"
+        },
+        "truncated_size_bytes": {
+          "title": "Truncated Size Bytes",
+          "type": "integer"
+        },
+        "strategy": {
+          "default": "unknown",
+          "enum": [
+            "middle-out",
+            "tail-cut",
+            "summarized",
+            "unknown"
+          ],
+          "title": "Strategy",
+          "type": "string"
+        },
+        "detected_by": {
+          "default": "inferred",
+          "enum": [
+            "capture-sdk",
+            "inferred"
+          ],
+          "title": "Detected By",
+          "type": "string"
+        }
+      },
+      "required": [
+        "location",
+        "original_size_bytes",
+        "truncated_size_bytes"
+      ],
+      "title": "TruncationEvent",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "trace_id": {
+      "title": "Trace Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "agent_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Agent Name"
+    },
+    "agent_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Agent Version"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "title": "Metadata",
+      "type": "object"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/Step"
+      },
+      "title": "Steps",
+      "type": "array"
+    }
+  },
+  "title": "Trace",
+  "type": "object"
+}

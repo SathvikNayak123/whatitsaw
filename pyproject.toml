@@ -1,0 +1,51 @@
+[project]
+name = "ctx-capture"
+version = "0.1.0"
+description = "MCP server for context-window observability: capture and query exactly what an LLM agent saw at every step."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "ctx-capture contributors" }]
+keywords = ["mcp", "model-context-protocol", "llm", "observability", "agents", "tracing"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Debuggers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "pydantic>=2.0",
+    "mcp>=1.26",
+    "uvicorn>=0.30",
+]
+
+[project.urls]
+Homepage = "https://github.com/ctx-capture/ctx-capture"
+Repository = "https://github.com/ctx-capture/ctx-capture"
+Issues = "https://github.com/ctx-capture/ctx-capture/issues"
+Changelog = "https://github.com/ctx-capture/ctx-capture/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+ctx-capture = "ctx_capture.mcp.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
