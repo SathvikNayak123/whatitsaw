@@ -1,0 +1,75 @@
+"""THE fidelity test. See docs/DESIGN.md "Capture-fidelity acceptance test".
+
+The capture SDK's recorded messages for a step, after canonical JSON serialization, must be
+byte-identical to what actually left application code for that call, as observed by an
+independent test-only interception point (FakeOpenAIClient.call_log — a recording point separate
+from ctx_capture's own capture wrapper). This test is CI-blocking forever: it is the schema's
+acceptance test, not an optional check.
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from ctx_capture.capture import TraceRecorder
+from ctx_capture.storage import SQLiteTraceRepository
+from tests.fixtures.fake_client import FakeOpenAIClient
+from tests.fixtures.toy_agent import build_canned_responses, run_toy_agent, tool_impl
+
+
+def _canonical(obj: Any) -> str:
+    return json.dumps(obj, sort_keys=True, default=str)
+
+
+def test_capture_fidelity_byte_identical(tmp_path):
+    recorder = TraceRecorder(agent_name="toy-agent")
+    fake_client = FakeOpenAIClient(build_canned_responses())
+    capturing_client = recorder.wrap_client(fake_client, provider="toy-provider")
+
+    run_toy_agent(recorder, capturing_client, tool_impl)
+
+    repo = SQLiteTraceRepository(str(tmp_path / "trace.db"))
+    repo.save(recorder.trace)
+
+    ground_truth = fake_client.call_log
+    assert len(ground_truth) == 5
+
+    for step_index in range(5):
+        stored_step = repo.get_step(recorder.trace.trace_id, step_index)
+        reconstructed_messages = stored_step.model_call.messages
+        actual_sent_messages = ground_truth[step_index]["messages"]
+        assert _canonical(reconstructed_messages) == _canonical(actual_sent_messages), (
+            f"step {step_index}: context reconstructed from storage is not byte-identical "
+            "to what was actually sent to the model"
+        )
+
+
+def test_truncation_captured_as_returned_vs_as_inserted(tmp_path):
+    recorder = TraceRecorder(agent_name="toy-agent")
+    fake_client = FakeOpenAIClient(build_canned_responses())
+    capturing_client = recorder.wrap_client(fake_client, provider="toy-provider")
+
+    run_toy_agent(recorder, capturing_client, tool_impl)
+
+    repo = SQLiteTraceRepository(str(tmp_path / "trace.db"))
+    repo.save(recorder.trace)
+    trace_id = recorder.trace.trace_id
+
+    # Step 1's tool call fetched an oversized result that was truncated before reinsertion.
+    truncated_step = repo.get_step(trace_id, 1)
+    assert len(truncated_step.truncation_events) == 1
+    tc = truncated_step.tool_calls[0]
+    assert tc.result_as_returned != tc.result_as_inserted
+    assert len(tc.result_as_returned) == 5000
+    assert tc.result_as_inserted.endswith("...[truncated]")
+
+    # Every other step's tool call was inserted unchanged: no truncation event.
+    for step_index in (0, 2, 3):
+        step = repo.get_step(trace_id, step_index)
+        assert step.truncation_events == []
+        assert step.tool_calls[0].result_as_returned == step.tool_calls[0].result_as_inserted
+
+    # Step 4 has no tool call at all (final answer).
+    final_step = repo.get_step(trace_id, 4)
+    assert final_step.tool_calls == []

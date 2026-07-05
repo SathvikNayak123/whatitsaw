@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_call: # lets release.yml re-run the full test suite as its gate before publishing
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev]"
+      # test_fidelity.py is CI-blocking forever: it's the schema's acceptance test, not an
+      # optional check. See docs/DESIGN.md "Capture-fidelity acceptance test".
+      - run: pytest -v
