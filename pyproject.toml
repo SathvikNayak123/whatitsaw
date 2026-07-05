@@ -5,7 +5,7 @@ description = "MCP server for context-window observability: capture and query ex
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
-authors = [{ name = "ctx-capture contributors" }]
+authors = [{ name = "Sathvik Nayak" }]
 keywords = ["mcp", "model-context-protocol", "llm", "observability", "agents", "tracing"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -24,10 +24,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ctx-capture/ctx-capture"
-Repository = "https://github.com/ctx-capture/ctx-capture"
-Issues = "https://github.com/ctx-capture/ctx-capture/issues"
-Changelog = "https://github.com/ctx-capture/ctx-capture/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/SathvikNayak123/ctx-capture"
+Repository = "https://github.com/SathvikNayak123/ctx-capture"
+Issues = "https://github.com/SathvikNayak123/ctx-capture/issues"
+Changelog = "https://github.com/SathvikNayak123/ctx-capture/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
