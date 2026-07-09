@@ -16,16 +16,24 @@ and provider dashboards — ctx-capture exists so that question has a direct ans
 
 ## 60-second quickstart
 
+Not yet published to PyPI (tracked in [docs/registry-submission.md](docs/registry-submission.md))
+— `uvx` runs it straight from this repo instead via `--from git+...`, no `pip install` or clone
+needed. First run downloads and builds from source (~15s on a cold cache, verified); every run
+after that is instant from `uv`'s cache.
+
 ```bash
 # 1. Run the server (SQLite-backed, zero config)
-uvx ctx-capture --db my_agent.db
+uvx --from git+https://github.com/SathvikNayak123/ctx-capture ctx-capture --db my_agent.db
 
 # 2. Point an MCP client at it — e.g. Claude Desktop's claude_desktop_config.json:
 {
   "mcpServers": {
     "ctx-capture": {
       "command": "uvx",
-      "args": ["ctx-capture", "--db", "/absolute/path/to/my_agent.db"]
+      "args": [
+        "--from", "git+https://github.com/SathvikNayak123/ctx-capture",
+        "ctx-capture", "--db", "/absolute/path/to/my_agent.db"
+      ]
     }
   }
 }
@@ -51,8 +59,12 @@ saw at step 12" — the client calls `list_traces` / `get_step_context` for you.
 
 No PyPI account, no server to stand up beyond the one command above — `--db` defaults to
 `ctx_capture.db` in the current directory if you omit it. For a shared/remote deployment, run
-`uvx ctx-capture --transport http --port 8000 --bearer-token <token>` instead (see
-[docs/DESIGN.md § Transport](docs/DESIGN.md) for why stdio is the default and HTTP is opt-in).
+`uvx --from git+https://github.com/SathvikNayak123/ctx-capture ctx-capture --transport http --port 8000 --bearer-token <token>`
+instead (see [docs/DESIGN.md § Transport](docs/DESIGN.md) for why stdio is the default and HTTP
+is opt-in).
+
+Working from a local clone instead? `pip install -e .` then `python -m ctx_capture.mcp --db
+my_agent.db` does the same thing without going through `uv`.
 
 ## Tool reference
 
@@ -118,6 +130,10 @@ See [docs/DESIGN.md § Non-goals](docs/DESIGN.md) for the reasoning behind each.
 
 ## Roadmap
 
+- **Anthropic Messages API adapter** — capture today wraps OpenAI-compatible
+  `chat.completions`-shaped clients only; a `client.messages.create` adapter for Anthropic's
+  wire shape is not yet built. Until it ships, "framework-agnostic" (works regardless of which
+  agent framework orchestrates the calls) should not be read as "provider-agnostic."
 - **OTel span-ingestion adapter** — an additive way to bring in traces from OTel GenAI
   instrumentation, without making it the primary (lower-fidelity) capture path.
 - **Redaction hook** — an opt-in `redact(message) -> message` hook at capture time. Not yet
