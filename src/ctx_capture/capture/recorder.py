@@ -6,6 +6,7 @@ Trace as an agent runs. See docs/DESIGN.md "Capture mechanism" for why this is S
 from __future__ import annotations
 
 import copy
+import inspect
 import json
 import time
 from datetime import datetime, timezone
@@ -13,6 +14,22 @@ from typing import Any, Callable
 from uuid import uuid4
 
 from ctx_capture.schema import ModelCall, Step, TokenCounts, ToolCall, Trace, TruncationEvent
+
+
+def _bind_args(fn: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Capture the exact args passed to a tool call, positional or keyword, by parameter name —
+    a plain `copy.deepcopy(kwargs)` silently drops positional args, which most tool-calling code
+    (agent frameworks invoke tools with `fn(*parsed_args)` as often as by keyword) actually uses.
+    Falls back to keyword-only capture, tagging any positionals under `_positional_args` so
+    nothing is silently dropped, if `fn`'s signature can't be inspected (e.g. a C builtin)."""
+    try:
+        bound = inspect.signature(fn).bind(*args, **kwargs)
+        return copy.deepcopy(dict(bound.arguments))
+    except (TypeError, ValueError):
+        raw = dict(kwargs)
+        if args:
+            raw["_positional_args"] = list(args)
+        return copy.deepcopy(raw)
 
 
 def _to_plain(obj: Any) -> dict[str, Any]:
@@ -110,7 +127,7 @@ class TraceRecorder:
                 raise RuntimeError("wrap_tool called outside of an active step (call begin_step() first)")
             current_step = self._current_step
 
-            args_raw = copy.deepcopy(kwargs)
+            args_raw = _bind_args(fn, args, kwargs)
             started_at = datetime.now(timezone.utc)
             result = fn(*args, **kwargs)
             ended_at = datetime.now(timezone.utc)

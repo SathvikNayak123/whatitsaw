@@ -204,14 +204,17 @@
         },
         "args_raw": {
           "additionalProperties": true,
+          "description": "Tool arguments by parameter name (positional args bound to their names), captured as their JSON representation.",
           "title": "Args Raw",
           "type": "object"
         },
         "result_as_returned": {
+          "description": "Tool return value pre-truncation, captured as its JSON representation (non-JSON-native types coerced deterministically: tuple/set -> array, bytes -> string).",
           "title": "Result As Returned"
         },
         "result_as_inserted": {
           "default": null,
+          "description": "The value actually inserted into the next model call's messages, post any framework truncation; captured as its JSON representation.",
           "title": "Result As Inserted"
         },
         "started_at": {

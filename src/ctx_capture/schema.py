@@ -16,6 +16,26 @@ from pydantic import BaseModel, Field
 SCHEMA_VERSION = "1.0"
 
 
+class UnsupportedSchemaVersionError(ValueError):
+    """Raised when a stored trace's major schema_version doesn't match this server's supported
+    major version. See docs/DESIGN.md "The schema": servers refuse (not silently coerce) traces
+    whose major version they don't support."""
+
+
+def _major_version(schema_version: str) -> str:
+    return schema_version.split(".", 1)[0]
+
+
+def assert_schema_version_supported(schema_version: str) -> None:
+    supported = _major_version(SCHEMA_VERSION)
+    if _major_version(schema_version) != supported:
+        raise UnsupportedSchemaVersionError(
+            f"trace has schema_version {schema_version!r} (major version "
+            f"{_major_version(schema_version)}), but this server only supports major version "
+            f"{supported}.x — see docs/DESIGN.md 'The schema' for the versioning/migration policy"
+        )
+
+
 class TokenCounts(BaseModel):
     prompt_tokens: int = 0
     completion_tokens: int = 0
@@ -35,9 +55,28 @@ class TruncationEvent(BaseModel):
 class ToolCall(BaseModel):
     tool_call_id: str
     tool_name: str
-    args_raw: dict[str, Any]
-    result_as_returned: Any
-    result_as_inserted: Any = None
+    # args_raw / result_as_* are captured as their JSON representation, not as live Python
+    # objects: they are persisted through a JSON round-trip (pydantic model_dump_json ->
+    # model_validate_json), so non-JSON-native types are coerced deterministically — tuples and
+    # sets become arrays, bytes become a string. This is faithful capture of "what the model
+    # saw", because tool arguments arrive *from* the model as JSON and tool results are inserted
+    # *back into* the message array as JSON; the Python-only tuple/set/bytes distinction never
+    # crosses the model boundary. It is a specified contract, not a silent lossy transform — the
+    # opaque byte-exact guarantee applies to the provider-native `messages`/`response` payloads
+    # (ModelCall), which are already JSON. See docs/DESIGN.md "The schema" design notes.
+    args_raw: dict[str, Any] = Field(
+        description="Tool arguments by parameter name (positional args bound to their names), "
+        "captured as their JSON representation."
+    )
+    result_as_returned: Any = Field(
+        description="Tool return value pre-truncation, captured as its JSON representation "
+        "(non-JSON-native types coerced deterministically: tuple/set -> array, bytes -> string)."
+    )
+    result_as_inserted: Any = Field(
+        default=None,
+        description="The value actually inserted into the next model call's messages, post any "
+        "framework truncation; captured as its JSON representation.",
+    )
     started_at: datetime
     ended_at: datetime | None = None
     error: str | None = None

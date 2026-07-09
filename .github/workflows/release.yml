@@ -1,8 +1,8 @@
 name: Release
 
-# Cuts a GitHub Release (with built sdist/wheel attached) whenever a `v*` tag is pushed, e.g.
-# `v0.1.0`. No PyPI publish step — add one later (see git history for a trusted-publishing
-# version of this workflow) once there's a PyPI project + trusted publisher to publish to.
+# Publishes to PyPI (via trusted publishing/OIDC, no token) and cuts a GitHub Release whenever a
+# `v*` tag is pushed, e.g. `v0.1.0`. Requires a PyPI trusted publisher registered for this
+# repo/workflow (https://docs.pypi.org/trusted-publishers/) — done as of the ctx-capture project.
 
 on:
   push:
@@ -27,6 +27,18 @@ jobs:
         with:
           name: dist
           path: dist/
+
+  publish-pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # required for PyPI trusted publishing (OIDC)
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
 
   github-release:
     needs: build

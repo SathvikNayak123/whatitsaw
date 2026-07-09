@@ -5,7 +5,7 @@ import json
 import sqlite3
 from typing import Any
 
-from ctx_capture.schema import Step, Trace
+from ctx_capture.schema import Step, Trace, assert_schema_version_supported
 from ctx_capture.storage.repository import TraceRepository, TraceSummaryRow
 
 _SCHEMA_DDL = """
@@ -88,6 +88,7 @@ class SQLiteTraceRepository(TraceRepository):
         if row is None:
             raise KeyError(f"no trace {trace_id}")
         schema_version, created_at, agent_name, agent_version, metadata_json = row
+        assert_schema_version_supported(schema_version)
 
         step_rows = self._conn.execute(
             "SELECT step_json FROM steps WHERE trace_id = ? ORDER BY step_index",
@@ -106,6 +107,13 @@ class SQLiteTraceRepository(TraceRepository):
         )
 
     def get_step(self, trace_id: str, step_index: int) -> Step:
+        version_row = self._conn.execute(
+            "SELECT schema_version FROM traces WHERE trace_id = ?", (trace_id,)
+        ).fetchone()
+        if version_row is None:
+            raise KeyError(f"no trace {trace_id}")
+        assert_schema_version_supported(version_row[0])
+
         row = self._conn.execute(
             "SELECT step_json FROM steps WHERE trace_id = ? AND step_index = ?",
             (trace_id, step_index),
