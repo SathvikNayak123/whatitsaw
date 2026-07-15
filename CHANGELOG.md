@@ -6,6 +6,28 @@ All notable changes to this project are documented in this file. The format foll
 see [docs/DESIGN.md § The schema](docs/DESIGN.md#the-schema): schema `1.x` is additive-only, and
 any 1.x reader can read any 1.x trace.
 
+## [0.2.0] - 2026-07-15
+
+### Added
+
+- **Anthropic Messages API capture path** (`TraceRecorder.wrap_anthropic_client`, wraps
+  `client.messages.create`): duck-typed like the existing OpenAI-compatible wrapper, no hard
+  dependency on the `anthropic` package. `system` is captured in `params` (a top-level wire param
+  on Anthropic's API, not a message), keeping the `messages` array byte-exact. Anthropic's
+  `input_tokens`/`output_tokens`/`cache_read_input_tokens`/`cache_creation_input_tokens` usage
+  shape is mapped into the schema's provider-neutral `TokenCounts`.
+- A second, independent capture-fidelity gate for this path
+  (`tests/test_fidelity_anthropic.py`), covering the same fixture matrix as the OpenAI path: plain
+  text, `tool_use`/`tool_result` blocks, multi-block mixed content, and image content blocks.
+- `examples/anthropic_agent.py`, an Anthropic-path counterpart to
+  `examples/deep_research_agent.py`.
+
+### Changed
+
+- The Anthropic Messages API adapter is no longer a roadmap item — "framework-agnostic" now
+  covers both OpenAI-compatible and Anthropic capture paths. See docs/DESIGN.md § Capture
+  mechanism and § Capture-fidelity acceptance test.
+
 ## [0.1.0] - 2026-07-05
 
 Initial release.

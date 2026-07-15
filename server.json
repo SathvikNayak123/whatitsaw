@@ -1,19 +1,19 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.SathvikNayak123/ctx-capture",
-  "description": "Context-window observability for LLM agents: capture and query exactly what an agent saw at every step, byte-accurately, independent of which agent framework orchestrates the calls. Capture wraps OpenAI-compatible chat-completions clients today.",
+  "description": "Context-window observability for LLM agents: capture and query exactly what an agent saw at every step, byte-accurately, independent of which agent framework orchestrates the calls. Capture wraps OpenAI-compatible chat-completions clients and Anthropic Messages API clients today.",
   "title": "ctx-capture",
   "repository": {
     "url": "https://github.com/SathvikNayak123/ctx-capture",
     "source": "github"
   },
-  "version": "0.1.0",
+  "version": "0.2.0",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "ctx-capture",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

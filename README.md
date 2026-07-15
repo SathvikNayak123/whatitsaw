@@ -6,49 +6,73 @@ An MCP server for context-window observability. It captures the exact model inpu
 of an agent run — including what a tool actually returned versus what got inserted into the next
 call after truncation — and lets any MCP client query it directly.
 
-## The pain
-
 Agent failures are usually context failures, not reasoning failures: a tool result got truncated
 before it reached the model, a token budget overflowed and the framework quietly cut messages
-from the middle, a retry duplicated a call the model never saw resolve. Today, answering "what
-did the model actually see at step 12" means archaeology across app logs, framework debug output,
-and provider dashboards — ctx-capture exists so that question has a direct answer.
+from the middle, a retry duplicated a call the model never saw resolve. Answering "what did the
+model actually see at step 12" today means archaeology across app logs, framework debug output,
+and provider dashboards. ctx-capture exists so that question has a direct answer.
 
-## 60-second quickstart
+## Features
 
-Not yet published to PyPI (tracked in [docs/registry-submission.md](docs/registry-submission.md))
-— `uvx` runs it straight from this repo instead via `--from git+...`, no `pip install` or clone
-needed. First run downloads and builds from source (~15s on a cold cache, verified); every run
-after that is instant from `uv`'s cache.
+- **Byte-exact per-step capture** — the exact provider-native message array as sent, not a
+  reshaped/normalized approximation.
+- **Pre- and post-truncation tool results** — `result_as_returned` vs. `result_as_inserted`, so
+  truncation is detectable, not just guessed at.
+- **Two capture paths**: OpenAI-compatible `chat.completions` clients and Anthropic's Messages
+  API, both duck-typed (no hard SDK dependency) and both gated by the same fidelity test.
+- **5 MCP tools + 2 resources** — `list_traces`, `get_step_context`, `diff_step_contexts`,
+  `find_context_anomalies`, `get_token_accounting`, plus `trace://` resources for browsing
+  clients. All 5 tools declare `outputSchema` and return `structuredContent`.
+- **Size-capped, paginated responses** — every tool response is bounded (default 50 KB); an
+  oversized payload gets a `resource_uri` pointer instead of ever blowing up a client's context.
+- **SQLite by default, zero external dependency** — `pip install ctx-capture` gives you a working
+  MCP server with nothing else to stand up.
+- **CI-blocking fidelity test** — the schema's acceptance test, not an optional check: captured
+  `messages` must be byte-identical, after canonical JSON serialization, to what actually left
+  application code.
+
+## Setup
 
 ```bash
-# 1. Run the server (SQLite-backed, zero config)
-uvx --from git+https://github.com/SathvikNayak123/ctx-capture ctx-capture --db my_agent.db
+pip install ctx-capture
+# or, without installing: uvx ctx-capture --db my_agent.db
+```
 
-# 2. Point an MCP client at it — e.g. Claude Desktop's claude_desktop_config.json:
+Run the server (SQLite-backed, zero config):
+
+```bash
+python -m ctx_capture.mcp --db my_agent.db
+```
+
+Point an MCP client at it — e.g. Claude Desktop's `claude_desktop_config.json`:
+
+```json
 {
   "mcpServers": {
     "ctx-capture": {
-      "command": "uvx",
-      "args": [
-        "--from", "git+https://github.com/SathvikNayak123/ctx-capture",
-        "ctx-capture", "--db", "/absolute/path/to/my_agent.db"
-      ]
+      "command": "ctx-capture",
+      "args": ["--db", "/absolute/path/to/my_agent.db"]
     }
   }
 }
-
-# 3. Instrument your agent (a few lines, works with any OpenAI-compatible client)
 ```
+
+Instrument your agent — a few lines, either capture path:
+
 ```python
 from ctx_capture.capture import TraceRecorder
 from ctx_capture.storage import SQLiteTraceRepository
 
 recorder = TraceRecorder(agent_name="my-agent")
-client = recorder.wrap_client(my_openai_compatible_client)  # unchanged call sites
+
+# OpenAI-compatible client — call sites unchanged
+client = recorder.wrap_client(my_openai_compatible_client)
+
+# ...or an Anthropic client — call sites unchanged
+client = recorder.wrap_anthropic_client(my_anthropic_client)
 
 recorder.begin_step()
-response = client.chat.completions.create(model="...", messages=messages)
+response = client.chat.completions.create(model="...", messages=messages)  # or client.messages.create(...)
 recorder.end_step()
 
 SQLiteTraceRepository("my_agent.db").save(recorder.trace)
@@ -57,20 +81,11 @@ SQLiteTraceRepository("my_agent.db").save(recorder.trace)
 Then, from your MCP client: "list recent traces for my-agent" or "show me exactly what the model
 saw at step 12" — the client calls `list_traces` / `get_step_context` for you.
 
-No PyPI account, no server to stand up beyond the one command above — `--db` defaults to
-`ctx_capture.db` in the current directory if you omit it. For a shared/remote deployment, run
-`uvx --from git+https://github.com/SathvikNayak123/ctx-capture ctx-capture --transport http --port 8000 --bearer-token <token>`
-instead (see [docs/DESIGN.md § Transport](docs/DESIGN.md) for why stdio is the default and HTTP
+For a shared/remote deployment: `ctx-capture --transport http --port 8000 --bearer-token
+<token>` (see [docs/DESIGN.md § Transport](docs/DESIGN.md) for why stdio is the default and HTTP
 is opt-in).
 
-Working from a local clone instead? `pip install -e .` then `python -m ctx_capture.mcp --db
-my_agent.db` does the same thing without going through `uv`.
-
 ## Tool reference
-
-All 5 tools declare `outputSchema` and return `structuredContent`; every response is capped
-(default 50KB) and paginated rather than ever silently truncated — see
-[docs/DESIGN.md § Pagination and size limits](docs/DESIGN.md).
 
 | Tool | Answers |
 |---|---|
@@ -82,6 +97,20 @@ All 5 tools declare `outputSchema` and return `structuredContent`; every respons
 
 Plus 2 resources for browsing clients: `trace://{trace_id}` (metadata + step index) and
 `trace://{trace_id}/step/{step_index}` (full, unpaginated step detail).
+
+## The fidelity test
+
+The project's one non-negotiable test, CI-blocking forever
+([tests/test_fidelity.py](tests/test_fidelity.py),
+[tests/test_fidelity_anthropic.py](tests/test_fidelity_anthropic.py)): capture a running agent's
+model input, reconstruct it from storage, and assert the reconstructed `messages` array is
+**byte-identical**, after canonical JSON serialization, to what an independent observation point
+saw actually leave application code. If this test can't pass, the schema has failed at the one
+thing it exists to do.
+
+Capture overhead is measured, not assumed: **~0.017ms added per instrumented model call**
+(in-process benchmark, wrapper only — see [docs/RESULTS.md](docs/RESULTS.md), reproduce with
+`python scripts/bench_overhead.py`).
 
 ## ctx-capture vs. Langfuse / LangSmith
 
@@ -99,26 +128,6 @@ Plus 2 resources for browsing clients: `trace://{trace_id}` (metadata + step ind
 review. **Use ctx-capture** when you need to prove, precisely, what one model call actually saw —
 usually while debugging a specific failure, from inside an MCP-capable client.
 
-## Schema stability promise
-
-Every trace is written with a pinned `schema_version`. Within a major version, changes are
-**additive-only** — new optional fields, never a repurposed or removed one — so any `1.x` reader
-can read any `1.x` trace. A breaking change requires a major version bump and a migration script;
-servers refuse (not silently coerce) traces with an unsupported major version. See
-[docs/DESIGN.md § The schema](docs/DESIGN.md) for the full schema and versioning rationale.
-
-## The fidelity test
-
-The project's one non-negotiable test, CI-blocking forever ([tests/test_fidelity.py](tests/test_fidelity.py)):
-capture a running agent's model input, reconstruct it from storage, and assert the reconstructed
-`messages` array is **byte-identical**, after canonical JSON serialization, to what an independent
-observation point saw actually leave application code. If this test can't pass, the schema has
-failed at the one thing it exists to do.
-
-Capture overhead is measured, not assumed: **~0.017ms added per instrumented model call**
-(in-process benchmark, wrapper only — see [docs/RESULTS.md](docs/RESULTS.md), reproduce with
-`python scripts/bench_overhead.py`).
-
 ## Non-goals
 
 - **No dashboards/UI** — MCP clients are the UI; we're not rebuilding Langfuse's trace viewer.
@@ -128,12 +137,16 @@ Capture overhead is measured, not assumed: **~0.017ms added per instrumented mod
 
 See [docs/DESIGN.md § Non-goals](docs/DESIGN.md) for the reasoning behind each.
 
+## Schema stability
+
+Every trace is written with a pinned `schema_version`. Within a major version, changes are
+**additive-only** — new optional fields, never a repurposed or removed one — so any `1.x` reader
+can read any `1.x` trace. A breaking change requires a major version bump and a migration script;
+servers refuse (not silently coerce) traces with an unsupported major version. See
+[docs/DESIGN.md § The schema](docs/DESIGN.md) for the full schema and versioning rationale.
+
 ## Roadmap
 
-- **Anthropic Messages API adapter** — capture today wraps OpenAI-compatible
-  `chat.completions`-shaped clients only; a `client.messages.create` adapter for Anthropic's
-  wire shape is not yet built. Until it ships, "framework-agnostic" (works regardless of which
-  agent framework orchestrates the calls) should not be read as "provider-agnostic."
 - **OTel span-ingestion adapter** — an additive way to bring in traces from OTel GenAI
   instrumentation, without making it the primary (lower-fidelity) capture path.
 - **Redaction hook** — an opt-in `redact(message) -> message` hook at capture time. Not yet

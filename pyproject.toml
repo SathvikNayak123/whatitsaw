@@ -1,6 +1,6 @@
 [project]
 name = "ctx-capture"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP server for context-window observability: capture and query exactly what an LLM agent saw at every step."
 readme = "README.md"
 license = "MIT"

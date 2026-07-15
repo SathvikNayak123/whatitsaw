@@ -220,3 +220,4 @@ __marimo__/
 # ctx-capture project-specific
 *.db
 .claude/
+CLAUDE.md
