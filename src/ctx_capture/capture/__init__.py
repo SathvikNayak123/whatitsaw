@@ -1,3 +1,3 @@
-from ctx_capture.capture.recorder import TraceRecorder
+from ctx_capture.capture.recorder import AnthropicCapturingClient, CapturingClient, TraceRecorder
 
-__all__ = ["TraceRecorder"]
+__all__ = ["AnthropicCapturingClient", "CapturingClient", "TraceRecorder"]

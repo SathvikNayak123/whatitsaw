@@ -1,6 +1,9 @@
-"""Instrumentation SDK: wraps an OpenAI-compatible client and generic tool functions to build a
-Trace as an agent runs. See docs/DESIGN.md "Capture mechanism" for why this is SDK-first
-(wrapping the actual Python objects the agent code passes) rather than OTel ingestion or a proxy.
+"""Instrumentation SDK: wraps an OpenAI-compatible client (`client.chat.completions.create`), an
+Anthropic client (`client.messages.create`), and generic tool functions to build a Trace as an
+agent runs. See docs/DESIGN.md "Capture mechanism" for why this is SDK-first (wrapping the actual
+Python objects the agent code passes) rather than OTel ingestion or a proxy. Both client wrappers
+are duck-typed against the shape of the call, not a hard dependency on either provider's SDK
+package.
 """
 
 from __future__ import annotations
@@ -47,6 +50,70 @@ def _to_plain(obj: Any) -> dict[str, Any]:
     raise TypeError(f"don't know how to capture response of type {type(obj)!r}")
 
 
+def _openai_tokens(usage: dict[str, Any]) -> TokenCounts:
+    return TokenCounts(
+        prompt_tokens=usage.get("prompt_tokens", 0),
+        completion_tokens=usage.get("completion_tokens", 0),
+        total_tokens=usage.get("total_tokens", 0),
+        cache_read_tokens=usage.get("cache_read_tokens", 0),
+        cache_write_tokens=usage.get("cache_write_tokens", 0),
+    )
+
+
+def _anthropic_tokens(usage: dict[str, Any]) -> TokenCounts:
+    # Anthropic's usage block uses input_tokens/output_tokens (not prompt/completion_tokens) and
+    # splits cache accounting into cache_read_input_tokens / cache_creation_input_tokens. This is
+    # a read of the provider's own metadata into ctx-capture's TokenCounts field, not a reshape of
+    # the opaque `messages`/`response` payloads — same kind of normalization the OpenAI path
+    # already does for its own usage shape.
+    input_tokens = usage.get("input_tokens", 0)
+    output_tokens = usage.get("output_tokens", 0)
+    return TokenCounts(
+        prompt_tokens=input_tokens,
+        completion_tokens=output_tokens,
+        total_tokens=usage.get("total_tokens", input_tokens + output_tokens),
+        cache_read_tokens=usage.get("cache_read_input_tokens", 0),
+        cache_write_tokens=usage.get("cache_creation_input_tokens", 0),
+    )
+
+
+def _record_call(
+    recorder: "TraceRecorder",
+    real_call: Callable[..., Any],
+    provider: str,
+    token_fn: Callable[[dict[str, Any]], TokenCounts],
+    *,
+    model: str,
+    messages: list[dict[str, Any]],
+    params: dict[str, Any],
+) -> Any:
+    # Snapshot before the call: this is the exact input the model receives, captured before any
+    # downstream code has a chance to mutate the same list/dict objects.
+    messages_snapshot = copy.deepcopy(messages)
+    params_snapshot = copy.deepcopy(params)
+
+    started_at = datetime.now(timezone.utc)
+    t0 = time.perf_counter()
+    response = real_call(model=model, messages=messages, **params)
+    latency_ms = (time.perf_counter() - t0) * 1000
+
+    response_plain = _to_plain(response)
+    usage = response_plain.get("usage") or {}
+
+    model_call = ModelCall(
+        provider=provider,
+        model=model,
+        params=params_snapshot,
+        messages=messages_snapshot,
+        request_id=response_plain.get("id"),
+        response=response_plain,
+        token_counts=token_fn(usage),
+        latency_ms=latency_ms,
+    )
+    recorder._record_model_call(model_call, started_at)
+    return response
+
+
 class _ChatCompletions:
     def __init__(self, real_create: Callable[..., Any], recorder: "TraceRecorder", provider: str) -> None:
         self._real_create = real_create
@@ -54,38 +121,10 @@ class _ChatCompletions:
         self._provider = provider
 
     def create(self, *, model: str, messages: list[dict[str, Any]], **params: Any) -> Any:
-        # Snapshot before the call: this is the exact input the model receives, captured
-        # before any downstream code has a chance to mutate the same list/dict objects.
-        messages_snapshot = copy.deepcopy(messages)
-        params_snapshot = copy.deepcopy(params)
-
-        started_at = datetime.now(timezone.utc)
-        t0 = time.perf_counter()
-        response = self._real_create(model=model, messages=messages, **params)
-        latency_ms = (time.perf_counter() - t0) * 1000
-
-        response_plain = _to_plain(response)
-        usage = response_plain.get("usage") or {}
-        token_counts = TokenCounts(
-            prompt_tokens=usage.get("prompt_tokens", 0),
-            completion_tokens=usage.get("completion_tokens", 0),
-            total_tokens=usage.get("total_tokens", 0),
-            cache_read_tokens=usage.get("cache_read_tokens", 0),
-            cache_write_tokens=usage.get("cache_write_tokens", 0),
+        return _record_call(
+            self._recorder, self._real_create, self._provider, _openai_tokens,
+            model=model, messages=messages, params=params,
         )
-
-        model_call = ModelCall(
-            provider=self._provider,
-            model=model,
-            params=params_snapshot,
-            messages=messages_snapshot,
-            request_id=response_plain.get("id"),
-            response=response_plain,
-            token_counts=token_counts,
-            latency_ms=latency_ms,
-        )
-        self._recorder._record_model_call(model_call, started_at)
-        return response
 
 
 class _Chat:
@@ -99,6 +138,31 @@ class CapturingClient:
 
     def __init__(self, client: Any, recorder: "TraceRecorder", provider: str = "openai-compatible") -> None:
         self.chat = _Chat(_ChatCompletions(client.chat.completions.create, recorder, provider))
+
+
+class _Messages:
+    def __init__(self, real_create: Callable[..., Any], recorder: "TraceRecorder", provider: str) -> None:
+        self._real_create = real_create
+        self._recorder = recorder
+        self._provider = provider
+
+    def create(self, *, model: str, messages: list[dict[str, Any]], **params: Any) -> Any:
+        # `system` is a top-level wire param on Anthropic's Messages API, not a message — keeping
+        # it in `params` (rather than folding it into `messages`) is what preserves byte-exact
+        # capture of the messages array actually sent.
+        return _record_call(
+            self._recorder, self._real_create, self._provider, _anthropic_tokens,
+            model=model, messages=messages, params=params,
+        )
+
+
+class AnthropicCapturingClient:
+    """Wraps an Anthropic client so `client.messages.create(...)` calls are captured
+    transparently; call sites don't otherwise change. Duck-typed like `CapturingClient` — no hard
+    dependency on the `anthropic` package."""
+
+    def __init__(self, client: Any, recorder: "TraceRecorder", provider: str = "anthropic") -> None:
+        self.messages = _Messages(client.messages.create, recorder, provider)
 
 
 class TraceRecorder:
@@ -115,6 +179,9 @@ class TraceRecorder:
 
     def wrap_client(self, client: Any, provider: str = "openai-compatible") -> CapturingClient:
         return CapturingClient(client, self, provider)
+
+    def wrap_anthropic_client(self, client: Any, provider: str = "anthropic") -> AnthropicCapturingClient:
+        return AnthropicCapturingClient(client, self, provider)
 
     def wrap_tool(self, fn: Callable[..., Any], tool_name: str | None = None) -> Callable[..., tuple[Any, str]]:
         """Wrap a tool function. The wrapped call returns `(result, tool_call_id)` — pass

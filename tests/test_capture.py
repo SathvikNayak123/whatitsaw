@@ -91,3 +91,39 @@ def test_non_json_types_are_coerced_deterministically_through_storage(tmp_path):
     assert result["labels"] == ["a"]           # set -> array
     assert isinstance(result["blob"], str)     # bytes -> string
     assert result["tag"] == "t"
+
+
+def test_wrap_anthropic_client_captures_model_call():
+    """Smoke test for the Anthropic capture path (see tests/test_fidelity_anthropic.py for the
+    byte-exact fidelity gate): `wrap_anthropic_client` records a ModelCall from
+    `client.messages.create`, with provider/model/params set and Anthropic's usage shape mapped
+    into TokenCounts."""
+    from tests.fixtures.fake_anthropic_client import FakeAnthropicClient, FakeAnthropicResponse
+
+    fake_client = FakeAnthropicClient(
+        [
+            FakeAnthropicResponse(
+                {
+                    "id": "msg_0",
+                    "usage": {"input_tokens": 8, "output_tokens": 3},
+                    "content": [{"type": "text", "text": "hi"}],
+                    "stop_reason": "end_turn",
+                }
+            )
+        ]
+    )
+    recorder = TraceRecorder(agent_name="anthropic-smoke")
+    capturing_client = recorder.wrap_anthropic_client(fake_client)
+
+    recorder.begin_step()
+    capturing_client.messages.create(
+        model="claude-sonnet-5", system="be helpful", messages=[{"role": "user", "content": "hi"}], max_tokens=64
+    )
+    recorder.end_step()
+
+    model_call = recorder.trace.steps[0].model_call
+    assert model_call.provider == "anthropic"
+    assert model_call.model == "claude-sonnet-5"
+    assert model_call.params == {"system": "be helpful", "max_tokens": 64}
+    assert model_call.token_counts.prompt_tokens == 8
+    assert model_call.token_counts.completion_tokens == 3
