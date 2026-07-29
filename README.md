@@ -82,8 +82,7 @@ Then, from your MCP client: "list recent traces for my-agent" or "show me exactl
 saw at step 12" — the client calls `list_traces` / `get_step_context` for you.
 
 For a shared/remote deployment: `ctx-capture --transport http --port 8000 --bearer-token
-<token>` (see [docs/DESIGN.md § Transport](docs/DESIGN.md) for why stdio is the default and HTTP
-is opt-in).
+<token>` (stdio is the default, HTTP is opt-in).
 
 ## Tool reference
 
@@ -109,8 +108,7 @@ saw actually leave application code. If this test can't pass, the schema has fai
 thing it exists to do.
 
 Capture overhead is measured, not assumed: **~0.017ms added per instrumented model call**
-(in-process benchmark, wrapper only — see [docs/RESULTS.md](docs/RESULTS.md), reproduce with
-`python scripts/bench_overhead.py`).
+(in-process benchmark, wrapper only, reproduce with `python scripts/bench_overhead.py`).
 
 ## ctx-capture vs. Langfuse / LangSmith
 
@@ -135,15 +133,12 @@ usually while debugging a specific failure, from inside an MCP-capable client.
 - **No multi-agent trace stitching in v1** — single-agent step fidelity first.
 - **No prompt management** — that's a build-time concern; this is runtime observability.
 
-See [docs/DESIGN.md § Non-goals](docs/DESIGN.md) for the reasoning behind each.
-
 ## Schema stability
 
 Every trace is written with a pinned `schema_version`. Within a major version, changes are
 **additive-only** — new optional fields, never a repurposed or removed one — so any `1.x` reader
 can read any `1.x` trace. A breaking change requires a major version bump and a migration script;
-servers refuse (not silently coerce) traces with an unsupported major version. See
-[docs/DESIGN.md § The schema](docs/DESIGN.md) for the full schema and versioning rationale.
+servers refuse (not silently coerce) traces with an unsupported major version.
 
 ## Roadmap
 

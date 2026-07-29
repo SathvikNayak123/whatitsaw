@@ -221,3 +221,10 @@ __marimo__/
 *.db
 .claude/
 CLAUDE.md
+
+# Kept local-only, not published to GitHub.
+docs/AUDIT_REPORT.md
+docs/DESIGN.md
+docs/RESULTS.md
+docs/registry-submission.md
+docs/proof/

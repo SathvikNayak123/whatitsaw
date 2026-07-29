@@ -2,9 +2,8 @@
 
 All notable changes to this project are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
-[Semantic Versioning](https://semver.org/). Schema versioning has its own, stricter promise —
-see [docs/DESIGN.md § The schema](docs/DESIGN.md#the-schema): schema `1.x` is additive-only, and
-any 1.x reader can read any 1.x trace.
+[Semantic Versioning](https://semver.org/). Schema versioning has its own, stricter promise:
+schema `1.x` is additive-only, and any 1.x reader can read any 1.x trace.
 
 ## [0.2.0] - 2026-07-15
 
@@ -25,8 +24,7 @@ any 1.x reader can read any 1.x trace.
 ### Changed
 
 - The Anthropic Messages API adapter is no longer a roadmap item — "framework-agnostic" now
-  covers both OpenAI-compatible and Anthropic capture paths. See docs/DESIGN.md § Capture
-  mechanism and § Capture-fidelity acceptance test.
+  covers both OpenAI-compatible and Anthropic capture paths.
 
 ## [0.1.0] - 2026-07-05
 
@@ -52,15 +50,14 @@ Initial release.
   response is ever silently unbounded.
 - The capture-fidelity acceptance test (CI-blocking): captured `messages` for a step must be
   byte-identical, after canonical JSON serialization, to what actually left application code.
-- Capture-overhead benchmark: ~0.017ms added per instrumented call (in-process, wrapper only —
-  see [docs/RESULTS.md](docs/RESULTS.md), reproduce with `python scripts/bench_overhead.py`).
+- Capture-overhead benchmark: ~0.017ms added per instrumented call (in-process, wrapper only,
+  reproduce with `python scripts/bench_overhead.py`).
 - `ctx-capture` console-script entry point (`python -m ctx_capture.mcp` / `uvx ctx-capture`).
 
 ### Known limitations (tracked for a future release)
 
 - No Postgres implementation yet (interface is ready; see `TraceRepository`).
-- No OTel span-ingestion adapter yet (SDK-first capture only — see docs/DESIGN.md § Capture
-  mechanism for why this is the primary path, not a gap).
-- No redaction hook implemented yet (documented as an opt-in mitigation in docs/DESIGN.md §
-  Risks; not yet built — treat captured trace data as sensitive by default until it is).
+- No OTel span-ingestion adapter yet (SDK-first capture is the primary path, not a gap).
+- No redaction hook implemented yet (an opt-in mitigation, not yet built — treat captured trace
+  data as sensitive by default until it is).
 - HTTP transport auth is a static bearer token; OAuth is roadmap, not implemented.
