@@ -33,31 +33,30 @@ and provider dashboards. ctx-capture exists so that question has a direct answer
 
 ## Setup
 
+### Prerequisites
+
+- **Python ≥ 3.10.**
+- **An agent to instrument** — anything that calls an OpenAI-compatible `chat.completions`
+  client or Anthropic's Messages API. Both capture paths are duck-typed, so no specific SDK
+  version is required.
+- **Any MCP client to query with** — Claude Code, Claude Desktop, Cursor, etc.
+- **Nothing else** — storage is a local SQLite file, created on first save. No database server,
+  no API key (the server itself never calls a model).
+
+Note the split: the *query* side is plug-and-play (any MCP client, zero code), but the *capture*
+side requires instrumenting your agent (step 2) — only code inside the agent process can see the
+exact bytes sent to the model. An MCP server pointed at an empty DB has nothing to serve.
+
+### 1. Install
+
 ```bash
 pip install ctx-capture
 # or, without installing: uvx ctx-capture --db my_agent.db
 ```
 
-Run the server (SQLite-backed, zero config):
+### 2. Instrument your agent
 
-```bash
-python -m ctx_capture.mcp --db my_agent.db
-```
-
-Point an MCP client at it — e.g. Claude Desktop's `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "ctx-capture": {
-      "command": "ctx-capture",
-      "args": ["--db", "/absolute/path/to/my_agent.db"]
-    }
-  }
-}
-```
-
-Instrument your agent — a few lines, either capture path:
+A few lines, either capture path:
 
 ```python
 from ctx_capture.capture import TraceRecorder
@@ -78,11 +77,65 @@ recorder.end_step()
 SQLiteTraceRepository("my_agent.db").save(recorder.trace)
 ```
 
-Then, from your MCP client: "list recent traces for my-agent" or "show me exactly what the model
-saw at step 12" — the client calls `list_traces` / `get_step_context` for you.
+To also capture tool calls (and detect truncation), wrap each tool and record what actually went
+back into the message history:
+
+```python
+wrapped_tool = recorder.wrap_tool(my_search_fn, tool_name="search")
+result, tool_call_id = wrapped_tool(query="...")
+# ...after your framework truncates/summarizes `result` into what it puts in messages:
+recorder.record_insertion(tool_call_id, inserted_value)
+```
+
+### 3. Record a run
+
+Run your instrumented agent normally — each run saves a trace into the DB. Don't have an agent
+handy? [examples/demo_agent.py](examples/demo_agent.py) is a complete, minimal worked example: a
+3-step trip-planner agent (search twice, then answer) instrumented end to end, with an offline
+simulated model so no API key is needed:
+
+```bash
+python examples/demo_agent.py my_agent.db
+# captured trace <trace_id> -> my_agent.db
+```
+
+([examples/deep_research_agent.py](examples/deep_research_agent.py) is the longer version that
+also exercises a real truncation event and a budget-overflow anomaly.)
+
+### 4. Run the MCP server
+
+SQLite-backed, zero config — point it at the same DB your agent writes to:
+
+```bash
+python -m ctx_capture.mcp --db my_agent.db
+```
 
 For a shared/remote deployment: `ctx-capture --transport http --port 8000 --bearer-token
 <token>` (stdio is the default, HTTP is opt-in).
+
+### 5. Connect an MCP client
+
+Claude Desktop (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "ctx-capture": {
+      "command": "ctx-capture",
+      "args": ["--db", "/absolute/path/to/my_agent.db"]
+    }
+  }
+}
+```
+
+Claude Code (VSCode / CLI) — same block in a `.mcp.json` at your project root, then reload the
+window so it picks the server up.
+
+### 6. Query
+
+From your MCP client, in plain language: "list recent traces for my-agent" or "show me exactly
+what the model saw at step 12" — the client calls `list_traces` / `get_step_context` for you.
+(With the demo trace above, try "any context anomalies in the last demo-trip-agent trace?")
 
 ## Tool reference
 
