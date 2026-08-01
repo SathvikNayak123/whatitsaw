@@ -31,6 +31,10 @@ and provider dashboards. ctx-capture exists so that question has a direct answer
   `messages` must be byte-identical, after canonical JSON serialization, to what actually left
   application code.
 
+## Demo
+
+https://github.com/user-attachments/assets/3bf481a4-8b22-4278-b797-940c085c60d0
+
 ## Setup
 
 ### Prerequisites
