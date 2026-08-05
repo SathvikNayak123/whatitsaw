@@ -12,10 +12,6 @@ from the middle, a retry duplicated a call the model never saw resolve. Answerin
 model actually see at step 12" today means archaeology across app logs, framework debug output,
 and provider dashboards. ctx-capture exists so that question has a direct answer.
 
-## Demo
-
-https://github.com/SathvikNayak123/whatitsaw/raw/main/docs/proof/demo.mp4
-
 ## Features
 
 - **Byte-exact per-step capture** — the exact provider-native message array as sent, not a
